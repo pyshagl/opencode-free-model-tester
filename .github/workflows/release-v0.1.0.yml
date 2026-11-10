@@ -1,0 +1,54 @@
+name: Publish v0.1.0 release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-v0.1.0.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run offline tests
+        run: npm test
+      - name: Build three portable packages and checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release dist
+          for platform in windows macos linux; do
+            node scripts/package.mjs "$platform"
+            (cd dist && zip -q -r "../release/opencode-free-model-tester-v0.1.0-${platform}.zip" "opencode-free-model-tester-${platform}")
+          done
+          (cd release && sha256sum ./*.zip > SHA256SUMS.txt)
+          test "$(find release -maxdepth 1 -name '*.zip' | wc -l)" -eq 3
+          ls -lh release/
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view v0.1.0 >/dev/null 2>&1; then
+            echo "Release v0.1.0 already exists; not overwriting existing assets."
+          else
+            gh release create v0.1.0 \
+              release/opencode-free-model-tester-v0.1.0-windows.zip \
+              release/opencode-free-model-tester-v0.1.0-macos.zip \
+              release/opencode-free-model-tester-v0.1.0-linux.zip \
+              release/SHA256SUMS.txt \
+              --title "OpenCode Free Model Tester v0.1.0" \
+              --target "$GITHUB_SHA" \
+              --notes-file .github/release-notes-v0.1.0.md
+          fi
