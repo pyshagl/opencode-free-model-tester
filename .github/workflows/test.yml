@@ -1,0 +1,36 @@
+name: Test and package
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / Node.js 22
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Offline tests (no API calls)
+        run: npm test
+      - name: Package platform source
+        shell: bash
+        run: |
+          mkdir -p dist
+          node scripts/package.mjs "${{ runner.os }}"
+      - name: Upload platform bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: tester-${{ runner.os }}
+          path: dist/*
