@@ -50,24 +50,27 @@ function parseOptions(argv) {
 // are launched without a shell; .cmd files require the Windows command processor.
 function commandFor(args) {
   const binary = process.env.OPENCODE_BIN || 'opencode';
-  if (process.platform==='win32' && !/\.exe$/i.test(binary)) {
-    const quote = s => '"'+String(s).replace(/"/g,'""')+'"';
-    const command = '"'+[binary,...args].map(quote).join(' ')+'"';
-    return {file:process.env.ComSpec || 'cmd.exe', args:['/d','/s','/c',command]};
+  // Node cannot directly spawn Windows .cmd shims. Use cmd.exe's CALL
+  // command, keeping the executable and each argument quoted separately.
+  if (process.platform === 'win32' && !/\.(exe|mjs|js)$/i.test(binary)) {
+    const quote = s => '"'+String(s).replace(/"/g, '""')+'"';
+    const command = 'call '+quote(binary)+' '+args.map(quote).join(' ');
+    return {file:process.env.ComSpec || 'cmd.exe', args:['/d','/s','/c',command],windowsVerbatimArguments:true};
   }
+  if (/\.(mjs|js)$/i.test(binary)) return {file:process.execPath,args:[binary,...args]};
   return {file:binary,args};
 }
 
 function execute(args,{cwd,timeoutMs=120000}={}) {
   return new Promise((resolve,reject)=>{
     const started=Date.now();
-    const {file,args:callArgs}=commandFor(args);
+    const {file,args:callArgs,windowsVerbatimArguments=false}=commandFor(args);
     const env={...process.env,
       OPENCODE_PURE:'1', OPENCODE_DISABLE_AUTOUPDATE:'1',
       // V2: disable plugins and all tools in the isolated test process only.
       OPENCODE_CONFIG_CONTENT:JSON.stringify({plugins:['-*'],permissions:[{action:'*',resource:'*',effect:'deny'}]})
     };
-    const child=spawn(file,callArgs,{cwd,env,windowsHide:true,stdio:['ignore','pipe','pipe']});
+    const child=spawn(file,callArgs,{cwd,env,windowsHide:true,windowsVerbatimArguments,stdio:['ignore','pipe','pipe']});
     let stdout='',stderr='',timedOut=false,closed=false;
     const cap=(s,chunk,max)=> (s+chunk.toString('utf8')).slice(-max);
     child.stdout.on('data',s=>{stdout=cap(stdout,s,4_000_000);});

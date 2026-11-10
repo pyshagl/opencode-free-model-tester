@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const fake=path.join(root,'tests','fixtures',process.platform==='win32'?'fake-opencode.cmd':'fake-opencode.mjs');
+const fake=path.join(root,'tests','fixtures','fake-opencode.mjs');
 const cli=path.join(root,'src','cli.mjs');
 const options={cwd:root,encoding:'utf8',env:{...process.env,OPENCODE_BIN:fake}};
 
